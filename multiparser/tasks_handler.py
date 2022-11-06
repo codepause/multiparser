@@ -22,6 +22,10 @@ class Request:
     def __call__(self, single_parser):
         return self.parser(single_parser, self, *self.args, **self.kwargs)
 
+    def __repr__(self):
+        s = f'{self.__class__.__class__}[{self.args}, {self.kwargs}]'
+        return s
+
 
 class RequestData:
     def __init__(self):
@@ -40,15 +44,21 @@ class RequestData:
     def is_completed(self):
         return self.total_parts >= self.parts_done
 
+    def __repr__(self):
+        s = f'{self.__class__.__name__}:[\n{self.data}\n]\n[{self.parts_done}/{self.total_parts} parts done]'
+        return s
+
 
 class TasksHandler:
     # a class to handle selenium + url get.
     def __init__(self):
         self._jobs_to_submit = Queue()
         self._job_results_to_gather = Queue()
+        self.requests_received = 0
 
     def add_job_to_parse(self, req: Request, *args, **kwargs):
         self._jobs_to_submit.put({'request': req})
+        self.requests_received += 1
 
     def get_jobs_to_submit(self):
         return self._jobs_to_submit
@@ -71,6 +81,7 @@ class RequestsHandler:
         self._done_requests = Queue()
 
         self._done = False
+        self.requests_completed = 0
 
         self._thread_worker = None
 
@@ -110,6 +121,7 @@ class RequestsHandler:
                     # print(f'request {real_request.parent_idx} completed!')
                     self._done_requests.put(container)
                     self.free_request_id(returned_request.parent_idx)
+                    self.requests_completed += 1
 
             time.sleep(1)
 

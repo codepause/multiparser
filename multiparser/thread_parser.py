@@ -10,14 +10,18 @@ import threading
 
 
 class SingleParserBase:
-    def __init__(self, worker_num: int, request_tasks: Queue, request_tasks_done: Queue):
+    def __init__(self, worker_num: int, request_tasks: Queue, request_handler: 'RequestHandler'):
         self._worker_num = worker_num
         self._request_tasks = request_tasks  # put in there more tasks from request. i.e. more pages?
-        self._request_tasks_done = request_tasks_done
+        self._request_handler = request_handler
 
         self._working_thread = None
 
         self._done = False
+
+    @property
+    def request_tasks_done(self) -> Queue:
+        return self._request_handler._tasks_handler.get_job_results()
 
     def thread_worker(self):
         while not self._done:
@@ -29,7 +33,7 @@ class SingleParserBase:
                 parsed_data = req(self)
                 result = {'request': req, 'data': parsed_data}
 
-                self._request_tasks_done.put(result)
+                self.request_tasks_done.put(result)
             except queue.Empty:
                 pass
 
@@ -48,8 +52,9 @@ class SingleParserBase:
 
 
 class SingleParser(SingleParserBase):
-    def __init__(self, worker_num: int, request_tasks: Queue, request_tasks_done: Queue, multi_lock: threading.Lock):
-        super(SingleParser, self).__init__(worker_num, request_tasks, request_tasks_done)
+    def __init__(self, worker_num: int, request_tasks: Queue, request_handler: 'RequestHandler',
+                 multi_lock: threading.Lock):
+        super(SingleParser, self).__init__(worker_num, request_tasks, request_handler)
         # self.driver = webdriver.Chrome('./utils/chromedriver.exe')
         self.lock = threading.Lock()
         self.multi_lock = multi_lock
@@ -62,11 +67,11 @@ class SingleParser(SingleParserBase):
 
 
 class MultiThreadParser:
-    def __init__(self, tasks_handler: 'TasksHandler', n_workers=1):
+    def __init__(self, request_handler: 'RequestHandler', n_workers=1, parser_instance: callable = SingleParser):
         self._n_workers = n_workers
         self._workers = list()
         self._request_tasks = Queue()
-        self._tasks_handler = tasks_handler
+        self._request_handler = request_handler
 
         self._done = False
 
@@ -74,10 +79,13 @@ class MultiThreadParser:
 
         self.lock = threading.Lock()
 
+        self.parser_instance = parser_instance
+
     def spawn_workers(self):
         # spawning single chromium parsers
         for n_worker in range(self._n_workers):
-            worker = SingleParser(n_worker, self._request_tasks, self._tasks_handler.get_job_results(), self.lock)
+            worker = self.parser_instance(n_worker, self._request_tasks, self._request_handler,
+                                          self.lock)
             worker.start()
             self._workers.append(worker)
 
@@ -99,7 +107,7 @@ class MultiThreadParser:
         self.submit_tasks_once()
 
     def submit_tasks_once(self):
-        q = self._tasks_handler.get_jobs_to_submit()
+        q = self._request_handler._tasks_handler.get_jobs_to_submit()
         while not q.empty():
             self._request_tasks.put(q.get())
 
