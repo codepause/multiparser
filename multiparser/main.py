@@ -4,20 +4,44 @@ from tasks_handler import *
 import time
 from threading import Thread
 from functools import partial
+from selenium.webdriver.chrome.options import Options
 import json
 import collections
 import os
 import csv
 import pandas as pd
+from selenium.webdriver.common.by import By
+import logging
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 from thread_parser import SingleParser
+from multiparser.html_parsers.search_parser import WBSearch
 
 
 class SingleParserDriver(SingleParser):
     def __init__(self, *args, **kwargs):
         super(SingleParserDriver, self).__init__(*args, **kwargs)
-        self.driver = webdriver.Chrome()
+        options = webdriver.ChromeOptions()
+        options.add_extension('../temp/extension_7_3_1_0.crx.crx')
+        self.driver = webdriver.Chrome(options=options)
         self._window_name = None
+        self._login_to_mayak()
+
+    def _login_to_mayak(self):
+        time.sleep(1)
+        h = self.driver.window_handles[1]
+        self.driver.switch_to.window(h)
+        time.sleep(1)
+        self.driver.get('https://app.mayak.bz/users/sign_in')
+        time.sleep(1)
+        login = self.driver.find_element(By.ID, 'login')
+        password = self.driver.find_element(By.ID, 'user_password')
+        login.send_keys('a3yrsnn@gmail.com')
+        password.send_keys('Nikenike1.')
+        button = self.driver.find_element(By.NAME, 'commit')
+        button.click()
+        self.driver.close()
 
     @property
     def window_name(self):
@@ -39,7 +63,7 @@ class App:
         )
         self.mtp = MultiThreadParser(
             self.rh,
-            n_workers=3,
+            n_workers=1,
             parser_instance=partial(SingleParserDriver)
         )
 
@@ -74,7 +98,7 @@ class App:
         self.worker.join()
 
 
-def start_parsing(a: App, requests_to_make: list, save_fnc: callable = lambda x: None):
+def start_parsing(a: App, requests_to_make: list):
     total_requests_done = 0
     done_requests = list()
     for req in requests_to_make:
@@ -83,7 +107,7 @@ def start_parsing(a: App, requests_to_make: list, save_fnc: callable = lambda x:
     while a.th.requests_received != a.rh.requests_completed:
         try:
             done_req = a.get_done_requests().get(timeout=1)
-            save_fnc(done_req)
+            done_req.save()
         except queue.Empty:
             pass
         print(f'Completed {a.rh.requests_completed} out of {a.th.requests_received}')
@@ -92,13 +116,13 @@ def start_parsing(a: App, requests_to_make: list, save_fnc: callable = lambda x:
 
 
 def main(a: App):
-    getter = HtmlGetter()
+    getter = WBSearch()
     dq = [
-        Request(getter, 'https://ya.ru'),
+        Request(getter, 'когтеточка'),
     ]
 
     a.start()
-    d = start_parsing(a, dq, print)
+    d = start_parsing(a, dq)
     time.sleep(2)
     a.stop()
 

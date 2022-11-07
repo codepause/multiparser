@@ -44,6 +44,9 @@ class RequestData:
     def is_completed(self):
         return self.total_parts >= self.parts_done
 
+    def save(self):
+        print(self.data)
+
     def __repr__(self):
         s = f'{self.__class__.__name__}:[\n{self.data}\n]\n[{self.parts_done}/{self.total_parts} parts done]'
         return s
