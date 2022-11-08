@@ -51,7 +51,7 @@ class RequestData:
         for key in self.data:
             data = self.data[key]['data']
             word = data['word']
-            with open(os.path.join(save_folder, f'{word}.txt'), 'w') as f:
+            with open(os.path.join(save_folder, f'{word}.txt'), 'w', encoding='utf-8') as f:
                 json.dump(data, f)
 
     def __repr__(self):

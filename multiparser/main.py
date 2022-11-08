@@ -121,6 +121,10 @@ def start_parsing(a: App, requests_to_make: collections.deque):
             done_req.save()
         print(f'Completed {a.rh.requests_completed} out of {a.th.requests_received}')
         time.sleep(0.5)
+    else:
+        while not a.get_done_requests().empty():
+            done_req = a.get_done_requests().get()
+            done_req.save()
     return done_requests
 
 
