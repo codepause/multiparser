@@ -1,6 +1,8 @@
 import threading
 from queue import Queue
 from collections import OrderedDict
+import os
+import json
 
 from custom_exceptions.cex import *
 import time
@@ -13,11 +15,11 @@ class Request:
         self.parser = parser
         self.args = args
         self.kwargs = kwargs
-        self.total_parts = kwargs.get('total_parts', 0)
+        self.total_parts = kwargs.get('total_parts', 1)
         self.current_part = kwargs.get('current_part', 0)
 
     def is_last(self):
-        return self.total_parts == self.current_part
+        return self.total_parts == self.current_part + 1
 
     def __call__(self, single_parser):
         return self.parser(single_parser, self, *self.args, **self.kwargs)
@@ -29,8 +31,8 @@ class Request:
 
 class RequestData:
     def __init__(self):
-        self.total_parts = -1
-        self.parts_done = -1
+        self.total_parts = 1
+        self.parts_done = 0
         self.data = dict()
 
     def add_data(self, job_result):
@@ -45,7 +47,12 @@ class RequestData:
         return self.total_parts >= self.parts_done
 
     def save(self):
-        print(self.data)
+        save_folder = '/Users/f1res/projects/newl/trading/multiparser/temp/parsed_data/'
+        for key in self.data:
+            data = self.data[key]['data']
+            word = data['word']
+            with open(os.path.join(save_folder, f'{word}.txt'), 'w') as f:
+                json.dump(data, f)
 
     def __repr__(self):
         s = f'{self.__class__.__name__}:[\n{self.data}\n]\n[{self.parts_done}/{self.total_parts} parts done]'

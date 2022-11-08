@@ -12,7 +12,6 @@ import csv
 import pandas as pd
 from selenium.webdriver.common.by import By
 import logging
-
 logging.getLogger().setLevel(logging.DEBUG)
 
 from thread_parser import SingleParser
@@ -20,18 +19,24 @@ from multiparser.html_parsers.search_parser import WBSearch
 
 
 class SingleParserDriver(SingleParser):
+    # docker headless https://stackoverflow.com/questions/45323271/how-to-run-selenium-with-chrome-in-docker
     def __init__(self, *args, **kwargs):
         super(SingleParserDriver, self).__init__(*args, **kwargs)
         options = webdriver.ChromeOptions()
+        options.add_argument('--window-size=1440,900')
+        options.add_argument('--headless=chrome')
         options.add_extension('../temp/extension_7_3_1_0.crx.crx')
+        self.chrome_options = options
         self.driver = webdriver.Chrome(options=options)
+        # self.driver = webdriver.Remote(options=options)
         self._window_name = None
         self._login_to_mayak()
 
     def _login_to_mayak(self):
-        time.sleep(1)
-        h = self.driver.window_handles[1]
-        self.driver.switch_to.window(h)
+        time.sleep(3)
+        if not self.chrome_options.headless:
+            h = self.driver.window_handles[1]
+            self.driver.switch_to.window(h)
         time.sleep(1)
         self.driver.get('https://app.mayak.bz/users/sign_in')
         time.sleep(1)
@@ -41,7 +46,8 @@ class SingleParserDriver(SingleParser):
         password.send_keys('Nikenike1.')
         button = self.driver.find_element(By.NAME, 'commit')
         button.click()
-        self.driver.close()
+        if not self.chrome_options.headless:
+            self.driver.close()
 
     @property
     def window_name(self):
@@ -63,7 +69,7 @@ class App:
         )
         self.mtp = MultiThreadParser(
             self.rh,
-            n_workers=1,
+            n_workers=3,
             parser_instance=partial(SingleParserDriver)
         )
 
@@ -98,28 +104,32 @@ class App:
         self.worker.join()
 
 
-def start_parsing(a: App, requests_to_make: list):
-    total_requests_done = 0
+def start_parsing(a: App, requests_to_make: collections.deque):
     done_requests = list()
-    for req in requests_to_make:
-        a.add_request(req)
-
+    a.add_request(requests_to_make.popleft())
     while a.th.requests_received != a.rh.requests_completed:
-        try:
-            done_req = a.get_done_requests().get(timeout=1)
+        while len(requests_to_make):
+            req = requests_to_make.popleft()
+            try:
+                a.add_request(req)
+            except MaxMemoryLimit:
+                requests_to_make.appendleft(req)
+                break
+        while not a.get_done_requests().empty():
+            done_req = a.get_done_requests().get()
+            # req is: done_req = {part_id: {'data': return data, 'request': req}
             done_req.save()
-        except queue.Empty:
-            pass
         print(f'Completed {a.rh.requests_completed} out of {a.th.requests_received}')
-        time.sleep(0.1)
+        time.sleep(0.5)
     return done_requests
 
 
 def main(a: App):
     getter = WBSearch()
-    dq = [
-        Request(getter, 'когтеточка'),
-    ]
+    dq = collections.deque()
+    words = ['пуховик', 'книги', 'массаж', 'лицо', 'подушка']
+    for word in words:
+        dq.append(Request(getter, word))
 
     a.start()
     d = start_parsing(a, dq)
@@ -128,6 +138,6 @@ def main(a: App):
 
 
 if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.DEBUG)
     a = App()
-
     main(a)
