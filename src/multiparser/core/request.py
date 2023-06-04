@@ -21,7 +21,7 @@ class Request:
 
     def __init__(self, parser: 'Parser', args: tuple = None, kwargs: dict = None, total_parts: int = 1,
                  current_part: int = 0, **__):
-        self.parent_idx = None  # Inner request idx.
+        self.container_idx = None  # idx of container to store data.
         self.parser = parser
         self.args = args or tuple()
         self.kwargs = kwargs or dict()

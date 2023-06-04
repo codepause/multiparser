@@ -39,7 +39,7 @@ class RequestsHandler:
         self._available_request_ids = Queue(maxsize=max_memory)
         for i in range(max_memory):
             self._available_request_ids.put(i)
-        self._request_id_data_mapper = dict()
+        self._request_id_container_mapper = dict()
         self._request_id_request_mapper = dict()
 
         self._done = False
@@ -49,19 +49,19 @@ class RequestsHandler:
     def add_request(self, req: 'Request'):
         if not self._available_request_ids.empty():
             req_id = self._available_request_ids.get()
-            req.parent_idx = req_id
+            req.container_idx = req_id
             self._request_id_request_mapper[req_id] = req
             self._inner_q.add_request_to_do(req)
         else:
             raise MaxMemoryLimit('max amount of requests parsing already')
 
     def free_request_id(self, req_id: int):
-        self._request_id_data_mapper.pop(req_id, None)
+        self._request_id_container_mapper.pop(req_id, None)
         self._request_id_request_mapper.pop(req_id, None)
         self._available_request_ids.put(req_id)
 
     def get_request_id_data_mapper(self) -> dict:
-        return self._request_id_data_mapper
+        return self._request_id_container_mapper
 
     @property
     def speedometer(self) -> Speedometer:
@@ -102,8 +102,8 @@ class RequestsHandler:
                 request_data = q.get()
                 request_done = request_data['request']
 
-                request = self._request_id_request_mapper[request_done.parent_idx]
-                container = self._request_id_data_mapper.get(request.parent_idx, RequestData())
+                request = self._request_id_request_mapper[request_done.container_idx]
+                container = self._request_id_container_mapper.get(request.container_idx, RequestData())
 
                 # in case user changed parent idx while parsing:
                 request_data['request'] = request
@@ -112,7 +112,7 @@ class RequestsHandler:
                 self._inner_q.num_requests_done += 1
                 if container.is_completed():
                     self._inner_q.add_request_done_data(container)
-                    self.free_request_id(request.parent_idx)
+                    self.free_request_id(request.container_idx)
 
             time.sleep(0.5)
 

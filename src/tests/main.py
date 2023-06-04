@@ -27,7 +27,7 @@ class App:
         )
         self.mtp = MultiThreadDriver(
             self.rh,
-            n_workers=1,
+            n_workers=2,
             driver_constructor=driver_constructor
         )
 
@@ -108,7 +108,7 @@ def convert_time(args: 'Namespace') -> tuple:
         time_end = datetime.datetime.strptime(args.time_end, "%Y-%m-%d")
 
     if args.time_start is None:
-        time_start = time_end - datetime.timedelta(minutes=args.limit * 2)
+        time_start = time_end - datetime.timedelta(minutes=args.limit)
     else:
         time_start = datetime.datetime.strptime(args.time_start, "%Y-%m-%d")
 
@@ -179,4 +179,5 @@ if __name__ == '__main__':
     args.api_key = "C:/projects/newl/trading/code/binance/secrets/init.txt"
     args.api_secret = "C:/projects/newl/trading/code/binance/secrets/init_secret.txt"
     args.out_dir = "C:/projects/newl/trading/data/btcusdt/"
+    args.time_start = "2020-01-01"
     main(args)
