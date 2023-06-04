@@ -5,6 +5,7 @@ from threading import Thread
 
 from multiparser.custom_exceptions.cex import MaxMemoryLimit
 from multiparser.core.request import RequestData
+from multiparser.core.speedometer import Speedometer
 
 
 class _InnerQ:
@@ -12,15 +13,18 @@ class _InnerQ:
     Storage class for requests tracking.
     """
 
-    def __init__(self):
+    def __init__(self, speedometer: Speedometer):
+        self.speedometer = speedometer
+
         self.requests_to_do = Queue()
         self.requests_done = Queue()
         self.requests_done_data = Queue()
         self.num_requests_to_do = 0
         self.num_containers_done = 0
+        self.num_requests_done = 0
 
     def add_request_to_do(self, req: 'Request', *_, **__):
-        self.requests_to_do.put({'request': req})
+        self.requests_to_do.put({'request': req, 'speedometer': self.speedometer})
         self.num_requests_to_do += 1
 
     def add_request_done_data(self, container: 'RequestData'):
@@ -29,9 +33,9 @@ class _InnerQ:
 
 
 class RequestsHandler:
-    def __init__(self, max_memory=100):
-        self._inner_q = _InnerQ()
-
+    def __init__(self, speedometer: 'Speedometer' = None, max_memory=100):
+        speedometer = speedometer or Speedometer()
+        self._inner_q = _InnerQ(speedometer)
         self._available_request_ids = Queue(maxsize=max_memory)
         for i in range(max_memory):
             self._available_request_ids.put(i)
@@ -56,31 +60,39 @@ class RequestsHandler:
         self._request_id_request_mapper.pop(req_id, None)
         self._available_request_ids.put(req_id)
 
-    def get_request_id_data_mapper(self):
+    def get_request_id_data_mapper(self) -> dict:
         return self._request_id_data_mapper
 
     @property
-    def requests_done(self):
+    def speedometer(self) -> Speedometer:
+        return self._inner_q.speedometer
+
+    @property
+    def requests_done(self) -> Queue:
         return self._inner_q.requests_done
 
     @property
-    def requests_to_do(self):
+    def requests_to_do(self) -> Queue:
         return self._inner_q.requests_to_do
 
     @property
-    def requests_done_data(self):
+    def requests_done_data(self) -> Queue:
         return self._inner_q.requests_done_data
 
     @property
-    def num_requests_to_do(self):
+    def num_requests_to_do(self) -> int:
         return self._inner_q.num_requests_to_do
 
     @property
-    def num_containers_done(self):
+    def num_containers_done(self) -> int:
         return self._inner_q.num_containers_done
 
     @property
-    def num_requests_undone(self):
+    def num_requests_done(self) -> int:
+        return self._inner_q.num_requests_done
+
+    @property
+    def num_requests_undone(self) -> int:
         return self.num_requests_to_do - self.num_containers_done
 
     def gather_results(self):
@@ -97,11 +109,12 @@ class RequestsHandler:
                 request_data['request'] = request
 
                 container.add_data(request_data)
+                self._inner_q.num_requests_done += 1
                 if container.is_completed():
                     self._inner_q.add_request_done_data(container)
                     self.free_request_id(request.parent_idx)
 
-            time.sleep(1)
+            time.sleep(0.5)
 
     def start(self):
         self._done = False

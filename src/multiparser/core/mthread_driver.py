@@ -1,11 +1,12 @@
 import threading
 
 from multiparser.core.requests_handler import RequestsHandler
-from multiparser.core.single_driver import SingleDriver
+from multiparser.core.single_driver import SingleDriverBase
 
 
 class MultiThreadDriver:
-    def __init__(self, request_handler: 'RequestsHandler', n_workers=1, driver_constructor: callable = SingleDriver):
+    def __init__(self, request_handler: 'RequestsHandler', n_workers=1,
+                 driver_constructor: callable = SingleDriverBase):
         self._n_workers = n_workers
         self.request_handler = request_handler
         self.driver_constructor = driver_constructor
