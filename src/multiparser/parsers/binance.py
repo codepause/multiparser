@@ -20,8 +20,10 @@ class BinanceHistoryGetter(Parser):
                                                           'close_timestamp', 'quote_asset_volume', 'num_trades',
                                                           'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume',
                                                           'ignore'])
-            df['open_time'] = df.open_timestamp.apply(lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc))
-            df['close_time'] = df.close_timestamp.apply(lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc))
+            df['open_timestamp'] = df['open_timestamp'].apply(
+                lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc).timestamp())
+            df['open_timestamp'] = df['open_timestamp'].apply(
+                lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc).timestamp())
             df = df[self.df_columns].sort_values('open_time', ascending=True)
         else:
             df = None
