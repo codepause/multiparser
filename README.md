@@ -10,7 +10,7 @@ Installation:
 ```
 pip install -e .
 ```
-[Demo code](https://github.com/codepause/multiparser/blob/master/multiparser/src/tests/main.py)
+[Demo code](https://github.com/codepause/multiparser/blob/master/src/tests/main.py)
 
 Usage:
 ```commandline
