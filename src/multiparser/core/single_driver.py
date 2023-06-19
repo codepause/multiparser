@@ -36,7 +36,12 @@ class SingleDriverBase:
 
                 speedometer.wait_required_time(self._lock)
 
-                parsed_data = req(self)
+                try:
+                    parsed_data = req(self)
+                except Exception as e:
+                    print(f'SingleDriverBase[{self._worker_num}] caught {e}')
+                    parsed_data = None
+
                 result = {'request': req, 'data': parsed_data}
 
                 self.requests_done.put(result)
