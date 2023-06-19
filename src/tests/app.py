@@ -3,6 +3,7 @@ import time
 from threading import Thread
 import collections
 import datetime
+import tqdm
 import pytz
 
 from multiparser.core.requests_handler import RequestsHandler
@@ -12,15 +13,34 @@ from multiparser.custom_exceptions.cex import MaxMemoryLimit
 from multiparser.core.speedometer import Speedometer
 
 
+def _envoke_update(slider: tqdm.tqdm, item: int) -> None:
+    slider.n = item
+    slider.refresh()
+
+
+def _envoke_total(slider: tqdm.tqdm, item: int) -> None:
+    slider.total = item
+    slider.refresh()
+
+
 class App:
-    def __init__(self, driver_constructor: callable):
+    """
+    Args:
+        driver_constructor (callable): driver constructor to call in thread.
+    Keyword Args:
+        n_workers (int): N threads to create.
+        rps (int): max requests per second speed.
+        max_memory (int): num of simultaneous requests to store in memory.
+    """
+
+    def __init__(self, driver_constructor: callable, n_workers: int = 2, rps: int = 10, max_memory: int = 20):
         self.rh = RequestsHandler(
-            speedometer=Speedometer(max_speed=10 / 1),
-            max_memory=20
+            speedometer=Speedometer(max_speed=rps),
+            max_memory=max_memory
         )
         self.mtp = MultiThreadDriver(
             self.rh,
-            n_workers=2,
+            n_workers=n_workers,
             driver_constructor=driver_constructor
         )
 
@@ -67,27 +87,34 @@ class App:
             df.to_csv(out_filename, index=False)
         return
 
-    def start_parsing(self, requests_to_make: collections.deque, out_dir: str = None) -> list:
-        done_requests = list()
-        self.add_request(requests_to_make.popleft())
+    def _gather_loop(self, slider: tqdm.tqdm, out_dir: str, meta: dict):
+        while not self.requests_done_data.empty():
+            done_req = self.requests_done_data.get()
+            # req is: done_req = {part_id: {'data': return data, 'request': req}
+            self.save_request_data(done_req, out_dir)
+            meta['requests_get_num'] += 1
+            _envoke_update(slider, meta['requests_get_num'])
 
-        while self.rh.num_requests_undone or len(requests_to_make):
-            while len(requests_to_make):
-                req = requests_to_make.popleft()
-                try:
-                    self.add_request(req)
-                except MaxMemoryLimit:
-                    requests_to_make.appendleft(req)
-                    break
-            while not self.requests_done_data.empty():
-                done_req = self.requests_done_data.get()
-                # req is: done_req = {part_id: {'data': return data, 'request': req}
-                self.save_request_data(done_req, out_dir)
-            # print(f'Completed {self.rh.num_containers_done} out of {self.rh.num_requests_to_do}')
-            time.sleep(0.05)
-        else:
-            while not self.requests_done_data.empty():
-                done_req = self.requests_done_data.get()
-                # print(f'Completed {self.rh.num_containers_done} out of {self.rh.num_requests_to_do}')
-                self.save_request_data(done_req, out_dir)
+    def _put_loop(self, requests_to_make: collections.deque, slider: tqdm.tqdm, meta: dict):
+        while len(requests_to_make):
+            req = requests_to_make.popleft()
+            try:
+                self.add_request(req)
+                meta['requests_post_num'] += 1
+                _envoke_total(slider, meta['requests_post_num'])
+            except MaxMemoryLimit:
+                requests_to_make.appendleft(req)
+                break
+
+    def start_parsing(self, requests_to_make: collections.deque, out_dir: str = None, verbose: bool = False) -> list:
+        done_requests = list()
+
+        meta = {'requests_post_num': 0, 'requests_get_num': 0, 'requests_total_num': len(requests_to_make)}
+        with tqdm.tqdm(total=1, disable=not verbose, desc=f'total: {meta["requests_total_num"]}; post/get') as slider:
+            while self.rh.num_requests_undone or len(requests_to_make):
+                self._put_loop(requests_to_make, slider, meta)
+                self._gather_loop(slider, out_dir, meta)
+                time.sleep(0.05)
+            else:
+                self._gather_loop(slider, out_dir, meta)
         return done_requests

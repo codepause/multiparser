@@ -24,7 +24,10 @@ class BinanceHistoryGetter(Parser):
                 lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc).timestamp())
             df['open_timestamp'] = df['open_timestamp'].apply(
                 lambda ts: datetime.fromtimestamp(ts / 1000).astimezone(pytz.utc).timestamp())
-            df = df[self.df_columns].sort_values('open_time', ascending=True)
+
+            df['open_time'] = df.open_timestamp.apply(lambda ts: datetime.fromtimestamp(ts / 1000))
+            df['close_time'] = df.close_timestamp.apply(lambda ts: datetime.fromtimestamp(ts / 1000))
+            df = df[self.df_columns].sort_values('open_timestamp', ascending=True)
         else:
             df = None
         return df

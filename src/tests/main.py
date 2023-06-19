@@ -1,4 +1,3 @@
-import time
 from functools import partial
 import collections
 import argparse
@@ -21,7 +20,7 @@ def convert_time(args: 'Namespace') -> tuple:
         time_end = datetime.datetime.strptime(args.time_end, "%Y-%m-%d")
 
     if args.time_start is None:
-        time_start = time_end - datetime.timedelta(minutes=args.limit)
+        time_start = time_end - datetime.timedelta(minutes=args.limit * 10)
     else:
         time_start = datetime.datetime.strptime(args.time_start, "%Y-%m-%d")
 
@@ -44,14 +43,31 @@ def split_time(time_start: datetime.datetime, time_end: datetime.datetime, granu
     return splits
 
 
+class PlaceholderClient:
+    # class for demo only, matches only .klines fnc in binance driver
+    def __init__(self, *_, **__):
+        pass
+
+    def klines(self, *_, **__) -> None:
+        return None
+
+
+def get_driver_builder(args: 'Namespace', typ: str = 'Spot'):
+    if typ == 'Spot':
+        from binance.spot import Spot
+        api_key = open(args.api_key).readline().strip()
+        api_secret = open(args.api_secret).readline().strip()
+
+        client = Spot(api_key, api_secret)
+        return partial(BinanceDriver, client)
+    else:
+        client = PlaceholderClient()
+        return partial(BinanceDriver, client)
+
+
 def main(args: 'Namespace'):
-    from binance.spot import Spot
-
-    api_key = open(args.api_key).readline().strip()
-    api_secret = open(args.api_secret).readline().strip()
-
-    client = Spot(api_key, api_secret)
-    a = App(partial(BinanceDriver, client))
+    builder = get_driver_builder(args, 'test')
+    a = App(builder)
 
     getter = BinanceHistoryGetter()
 
@@ -67,8 +83,7 @@ def main(args: 'Namespace'):
                           kwargs={'limit': args.limit, 'startTime': local_time_start, 'endTime': local_time_end}))
 
     a.start()
-    a.start_parsing(dq, args.out_dir)
-    time.sleep(2)
+    a.start_parsing(dq, args.out_dir, verbose=True)
     a.stop()
 
 
@@ -81,7 +96,7 @@ def parse_args():
     parser.add_argument('--limit', type=int, help='amount of inclusions. 1k max for 1m tick', default=1000)
     parser.add_argument('--time_start', type=str, help="time start. YYYY-MM-DD", default=None)
     parser.add_argument('--time_end', type=str, help="time end. YYYY-MM-DD", default=None)
-    parser.add_argument('--out_dir', type=str, help='out dir path')
+    parser.add_argument('--out_dir', type=str, help='out dir path', default=None)
     return parser.parse_args()
 
 
@@ -89,8 +104,4 @@ if __name__ == '__main__':
     # https://github.com/binance/binance-connector-python
     logging.getLogger().setLevel(logging.DEBUG)
     args = parse_args()
-    args.api_key = "C:/projects/newl/trading/code/binance/secrets/init.txt"
-    args.api_secret = "C:/projects/newl/trading/code/binance/secrets/init_secret.txt"
-    # args.out_dir = "C:/projects/newl/trading/data/btcusdt/"
-    args.time_start = "2022-01-01"
     main(args)
